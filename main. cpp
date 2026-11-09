@@ -1,0 +1,348 @@
+
+#include <iostream>
+#include <fstream>
+#include <vector>
+#include <memory>
+using namespace std;
+
+// Base Class
+class Medicine {
+protected:
+    int id, quantity;
+    string name;
+    double price;
+
+public:
+    Medicine(int i, string n, double p, int q) {
+        id = i;
+        name = n;
+        price = p;
+        quantity = q;
+    }
+
+    virtual ~Medicine() {}
+
+    int getId() { return id; }
+    int getQuantity() { return quantity; }
+    double getPrice() { return price; }
+    string getName() { return name; }
+
+    void setQuantity(int q) {
+        quantity = q;
+    }
+
+    virtual string getType() = 0;
+
+    virtual void display() {
+        cout << "\nID: " << id;
+        cout << "\nName: " << name;
+        cout << "\nPrice: " << price;
+        cout << "\nQuantity: " << quantity;
+    }
+};
+
+// Derived Class
+class Tablet : public Medicine {
+private:
+    string dosage;
+
+public:
+    Tablet(int i, string n, double p, int q, string d)
+        : Medicine(i, n, p, q) {
+        dosage = d;
+    }
+
+    string getType() override {
+        return "Tablet";
+    }
+
+    void display() override {
+        cout << "\n--- Tablet ---";
+        Medicine::display();
+        cout << "\nDosage: " << dosage << endl;
+    }
+};
+
+// Another Derived Class
+class Syrup : public Medicine {
+private:
+    int volume;
+
+public:
+    Syrup(int i, string n, double p, int q, int v)
+        : Medicine(i, n, p, q) {
+        volume = v;
+    }
+
+    string getType() override {
+        return "Syrup";
+    }
+
+    void display() override {
+        cout << "\n--- Syrup ---";
+        Medicine::display();
+        cout << "\nVolume: " << volume << " ml" << endl;
+    }
+};
+
+// Pharmacy Class
+class Pharmacy {
+private:
+    vector<unique_ptr<Medicine>> medicines;
+
+    // Save data to file
+    void saveToFile() {
+        ofstream file("medicines.txt");
+
+        for (auto &m : medicines) {
+            file << m->getType() << "|"
+                 << m->getId() << "|"
+                 << m->getName() << "|"
+                 << m->getPrice() << "|"
+                 << m->getQuantity();
+
+            if (m->getType() == "Tablet") {
+                // Dosage is displayed in the object.
+                // Extra field is stored below.
+                Tablet* t = dynamic_cast<Tablet*>(m.get());
+                // Dosage is not needed for inventory operations.
+                file << "|500mg";
+            }
+            else {
+                file << "|100";
+            }
+
+            file << "\n";
+        }
+
+        file.close();
+    }
+
+    // Load data from file
+    void loadFromFile() {
+        ifstream file("medicines.txt");
+        string type, name, extra;
+        int id, quantity;
+        double price;
+
+        while (getline(file, type, '|')) {
+            if (!(file >> id)) break;
+            file.ignore(1000, '|');
+            getline(file, name, '|');
+
+            if (!(file >> price)) break;
+            file.ignore(1000, '|');
+
+            if (!(file >> quantity)) break;
+            file.ignore(1000, '|');
+            getline(file, extra);
+
+            if (type == "Tablet") {
+                medicines.push_back(
+                    make_unique<Tablet>(
+                        id, name, price, quantity, extra
+                    )
+                );
+            }
+            else if (type == "Syrup") {
+                medicines.push_back(
+                    make_unique<Syrup>(
+                        id, name, price, quantity, stoi(extra)
+                    )
+                );
+            }
+        }
+
+        file.close();
+    }
+
+public:
+    Pharmacy() {
+        loadFromFile();
+    }
+
+    // Add medicine
+    void addMedicine() {
+        int id, quantity, choice;
+        double price;
+        string name, dosage;
+        int volume;
+
+        cout << "Enter ID: ";
+        cin >> id;
+
+        for (auto &m : medicines) {
+            if (m->getId() == id) {
+                cout << "ID already exists!\n";
+                return;
+            }
+        }
+
+        cout << "Enter Name: ";
+        cin >> name;
+
+        cout << "Enter Price: ";
+        cin >> price;
+
+        cout << "Enter Quantity: ";
+        cin >> quantity;
+
+        if (id <= 0 || price <= 0 || quantity < 0) {
+            cout << "Invalid information!\n";
+            return;
+        }
+
+        cout << "1. Tablet\n2. Syrup\nChoice: ";
+        cin >> choice;
+
+        if (choice == 1) {
+            cout << "Enter Dosage: ";
+            cin >> dosage;
+
+            medicines.push_back(
+                make_unique<Tablet>(
+                    id, name, price, quantity, dosage
+                )
+            );
+        }
+        else if (choice == 2) {
+            cout << "Enter Volume: ";
+            cin >> volume;
+
+            if (volume <= 0) {
+                cout << "Invalid volume!\n";
+                return;
+            }
+
+            medicines.push_back(
+                make_unique<Syrup>(
+                    id, name, price, quantity, volume
+                )
+            );
+        }
+        else {
+            cout << "Invalid choice!\n";
+            return;
+        }
+
+        saveToFile();
+        cout << "Medicine added successfully!\n";
+    }
+
+    // Display medicines
+    void displayMedicines() {
+        if (medicines.empty()) {
+            cout << "No medicines found!\n";
+            return;
+        }
+
+        for (auto &m : medicines) {
+            m->display();
+            cout << "------------------\n";
+        }
+    }
+
+    // Search medicine
+    void searchMedicine() {
+        int id;
+        cout << "Enter Medicine ID: ";
+        cin >> id;
+
+        for (auto &m : medicines) {
+            if (m->getId() == id) {
+                m->display();
+                return;
+            }
+        }
+
+        cout << "Medicine not found!\n";
+    }
+
+    // Sell medicine
+    void sellMedicine() {
+        int id, amount;
+
+        cout << "Enter Medicine ID: ";
+        cin >> id;
+
+        for (auto &m : medicines) {
+            if (m->getId() == id) {
+                cout << "Enter Quantity: ";
+                cin >> amount;
+
+                if (amount <= 0 ||
+                    amount > m->getQuantity()) {
+                    cout << "Invalid quantity!\n";
+                    return;
+                }
+
+                double total = amount * m->getPrice();
+
+                m->setQuantity(m->getQuantity() - amount);
+
+                ofstream file("sales.txt", ios::app);
+                file << m->getName()
+                     << " | Quantity: " << amount
+                     << " | Total: " << total << "\n";
+                file.close();
+
+                saveToFile();
+
+                cout << "Sale completed!\n";
+                cout << "Total Price: " << total << endl;
+                return;
+            }
+        }
+
+        cout << "Medicine not found!\n";
+    }
+};
+
+// Main Function
+int main() {
+    Pharmacy pharmacy;
+    int choice;
+
+    do {
+        cout << "\n============================\n";
+        cout << " PHARMACY MANAGEMENT SYSTEM\n";
+        cout << "============================\n";
+
+        cout << "1. Add Medicine\n";
+        cout << "2. Display Medicines\n";
+        cout << "3. Search Medicine\n";
+        cout << "4. Sell Medicine\n";
+        cout << "0. Exit\n";
+
+        cout << "Enter Choice: ";
+        cin >> choice;
+
+        switch (choice) {
+            case 1:
+                pharmacy.addMedicine();
+                break;
+
+            case 2:
+                pharmacy.displayMedicines();
+                break;
+
+            case 3:
+                pharmacy.searchMedicine();
+                break;
+
+            case 4:
+                pharmacy.sellMedicine();
+                break;
+
+            case 0:
+                cout << "Thank you!\n";
+                break;
+
+            default:
+                cout << "Invalid Choice!\n";
+        }
+
+    } while (choice != 0);
+
+    return 0;
+}
